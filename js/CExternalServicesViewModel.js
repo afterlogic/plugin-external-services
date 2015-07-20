@@ -17,8 +17,16 @@ CExternalServicesViewModel.prototype.TabTitle = AfterLogicApi.i18n('PLUGIN_EXTER
 
 CExternalServicesViewModel.prototype.onApplyBindings = function ()
 {
-	window.servicesSettingsViewModelCallback = _.bind(function (sType, bResult) {
-		this.getServiceFromServer(sType);
+	window.servicesSettingsViewModelCallback = _.bind(function (sType, bResult, sMessage) {
+		if (bResult)
+		{
+			this.getServiceFromServer(sType);
+		}
+		else
+		{
+			this.getServiceFromServer(sType);
+			AfterLogicApi.showError(sMessage);
+		}
 	}, this);
 };
 
@@ -42,16 +50,34 @@ CExternalServicesViewModel.prototype.getServiceFromServer = function (sType)
 
 CExternalServicesViewModel.prototype.onGetServiceFromServerResponse = function (oResponse, oRequest)
 {
+	var 
+		oService = this.getService(oRequest.Type)
+	;
 	if (oResponse.Result)
 	{
-		var oService = this.getService(oRequest.Type);
 		if (oService)
 		{
-			oService.connected(true);
-			oService.userName('(' + oResponse.Result.Name + ')');
+			oService.connected(!oResponse.Disabled);
+			if (oService.connected())
+			{
+				oService.userName('(' + oResponse.Result.Name + ')');
+			}
+			else
+			{
+				oService.userName('');
+			}
 			oService.userScopes.valueHasMutated();
 			this.servicesAccounts.valueHasMutated();
 		}
+	}
+	else
+	{
+		if (oService)
+		{
+			_.each(oService.userScopes(), function (oScope) {
+				oScope.value(false);
+			});
+		}		
 	}
 };				
 

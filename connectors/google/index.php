@@ -2,19 +2,26 @@
 
 class CExternalServicesConnectorGoogle  extends CExternalServicesConnector
 {
+	public static $ConnectorName = 'google';
+	
 	public static function GetSupportedScopes()
 	{
 		return array('auth', 'filestorage');
 	}
 
+	public static function HasApiKey()
+	{
+		return true;
+	}
+
 	public static function CreateClient($oTenant = null)
 	{
 		$oClient = null;
-		$oSocial = $oTenant->getSocialByName('google');
+		$oSocial = $oTenant->getSocialByName(self::$ConnectorName);
 		
 		if(isset($oSocial) && $oSocial->SocialAllow)
 		{
-			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services=google';
+			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services='.self::$ConnectorName;
 			
 			require(PSEVEN_APP_ROOT_PATH.'libraries/OAuthClient/http.php');
 			require(PSEVEN_APP_ROOT_PATH.'libraries/OAuthClient/oauth_client.php');
@@ -91,7 +98,7 @@ class CExternalServicesConnectorGoogle  extends CExternalServicesConnector
 				));
 				
 				$aSocial = array(
-					'type' => 'google',
+					'type' => self::$ConnectorName,
 					'id' => $oUser->id,
 					'name' => $oUser->name,
 					'email' => isset($oUser->email) ? $oUser->email : '',
@@ -100,7 +107,7 @@ class CExternalServicesConnectorGoogle  extends CExternalServicesConnector
 					'scopes' => self::$Scopes
 				);
 
-				\CApi::Log('social_user_google');
+				\CApi::Log('social_user_'.self::$ConnectorName);
 				\CApi::LogObject($oUser);
 
 				$bResult = $aSocial;
@@ -110,12 +117,8 @@ class CExternalServicesConnectorGoogle  extends CExternalServicesConnector
 				$bResult = false;
 
 				$oClient->ResetAccessToken();
-				self::_socialError($oClient->error, 'google');
+				self::_socialError($oClient->error, self::$ConnectorName);
 			}
-		}
-		else
-		{
-			echo 'Connector is not allowed';
 		}
 		
 		return $bResult;

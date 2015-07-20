@@ -2,6 +2,8 @@
 
 class CExternalServicesConnectorTwitter extends CExternalServicesConnector
 {
+	public static $ConnectorName = 'twitter';
+	
 	public static function GetSupportedScopes()
 	{
 		return array('auth');
@@ -10,11 +12,11 @@ class CExternalServicesConnectorTwitter extends CExternalServicesConnector
 	public static function CreateClient($oTenant)
 	{
 		$oClient = null;
-		$oSocial = $oTenant->getSocialByName('dropbox');
+		$oSocial = $oTenant->getSocialByName(self::$ConnectorName);
 		
 		if(isset($oSocial) && $oSocial->SocialAllow)
 		{
-			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services=twitter';
+			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services=' . self::$ConnectorName;
 			if (!strpos($sRedirectUrl, '://localhost'))
 			{
 				$sRedirectUrl = str_replace('http:', 'https:', $sRedirectUrl);
@@ -76,14 +78,15 @@ class CExternalServicesConnectorTwitter extends CExternalServicesConnector
 				//$oClient->ResetAccessToken();
 
 				$aSocial = array(
-					'type' => 'twitter',
+					'type' => self::$ConnectorName,
 					'id' => $oUser->id,
 					'name' => $oUser->name,
 					'email' => isset($oUser->email) ? $oUser->email : '',
+					'access_token' => $oClient->access_token,
 					'scopes' => self::$Scopes
 				);
 
-				\CApi::Log('social_user_twitter');
+				\CApi::Log('social_user_' . self::$ConnectorName);
 				\CApi::LogObject($oUser);
 				$bResult = $aSocial;
 			}
@@ -91,12 +94,8 @@ class CExternalServicesConnectorTwitter extends CExternalServicesConnector
 			{
 				$bResult = false;
 				$oClient->ResetAccessToken();
-				self::_socialError($oClient->error, 'twitter');
+				self::_socialError($oClient->error, self::$ConnectorName);
 			}
-		}
-		else
-		{
-			echo 'Connector is not allowed';
 		}
 		
 		return $bResult;

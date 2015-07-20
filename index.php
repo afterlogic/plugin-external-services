@@ -6,6 +6,8 @@ class_exists('CApi') or die();
 
 class CExternalServicesPlugin extends AApiPlugin
 {
+	public static $sInviteEmail = '';
+
 	public $aConnectors = array();
 	public $aEnableConnectors = array();
 	private $sTenantHash = '';
@@ -22,6 +24,28 @@ class CExternalServicesPlugin extends AApiPlugin
 		$this->AddHook('account-update-password', 'AccountUpdatePassword');
 		
         $this->AddJsonHook('AjaxSocialAccountListGet', 'AjaxSocialAccountListGet');
+        $this->AddJsonHook('AjaxSocialAccountDelete', 'AjaxSocialAccountDelete');
+	}
+	
+	public function GetEnabledConnectors()
+	{
+		$aEnableConnectors = CApi::GetConf('plugins.external-services.connectors', array());
+		if (count($aEnableConnectors) === 0)
+		{
+			$sConnectorsDir = $this->GetPath() . DIRECTORY_SEPARATOR . 'connectors';
+			$aConnectorsDir = scandir($sConnectorsDir);
+			if ($aConnectorsDir && is_array($aConnectorsDir))
+			{
+				foreach ($aConnectorsDir as $sFileItem)
+				{
+					if ($sFileItem !== '.' && $sFileItem !== '..' && is_dir($sConnectorsDir . DIRECTORY_SEPARATOR . $sFileItem))
+					{
+						$aEnableConnectors[] = $sFileItem;
+					}
+				}
+			}
+		}
+		return $aEnableConnectors;
 	}
 	
 	public function Init()
@@ -34,7 +58,8 @@ class CExternalServicesPlugin extends AApiPlugin
 		$this->AddJsFile('js/CExternalServicesViewModel.js');
         $this->AddTemplate('ExternalServicesSettings', 'templates/settings.html');
 		
-		$this->aEnableConnectors = CApi::GetConf('plugins.external-services.connectors', array());
+		$this->aEnableConnectors = $this->GetEnabledConnectors();
+		
 		foreach ($this->aEnableConnectors as $sKey)
 		{
 			$this->AddCssFile('connectors/' . strtolower($sKey) . '/css/styles.css');
@@ -48,13 +73,20 @@ class CExternalServicesPlugin extends AApiPlugin
 		}
 
 		$this->IncludeTemplate('Login_WrapLoginViewModel', 'Login-Before-Description', 'templates/login.html');
+		$this->IncludeTemplate('Helpdesk_Login', 'Login-Before-Description', 'templates/helpdesk-login.html');
 		$this->IncludeTemplate('Mail_ComposeViewModel', 'Compose-Attach-Buttons', 'templates/attach-from.html');
 
-		$this->AddQueryHook('external-services', 'QueryHook');
+		$this->AddQueryHook('external-services', 'QueryHookExternalServices');
+		$this->AddQueryHook('invite-auth', 'QueryHookInviteAuth');
 	}
 	
 	public function PluginApiAppData(&$aAppData)
 	{
+		if (!empty(self::$sInviteEmail))
+		{
+			$aAppData['ExternalInviteEmail'] = self::$sInviteEmail;
+		}
+
 		$oApiDomainsManager = /* @var $oApiDomainsManager \CApiDomainsManager */ \CApi::Manager('domains');
 
 		$oInput = new api_Http();
@@ -99,6 +131,7 @@ class CExternalServicesPlugin extends AApiPlugin
 			$aSocials = $oApiSocial->getSocials($oAccount->IdAccount);
 			
 			$aUserServices = array();
+			
 			foreach ($aSocials as $oSocial)
 			{
 				if ($oSocial && $oSocial instanceof \CSocial)
@@ -106,7 +139,6 @@ class CExternalServicesPlugin extends AApiPlugin
 					$aSocial = $oSocial->toArray();
 					$aSocial['ServiceName'] = '';
 					$aSocial['UserScopes'] = array();
-					$aSocial['Connected'] = true;
 					
 					if (in_array(strtolower($oSocial->TypeStr), $this->aEnableConnectors))
 					{
@@ -114,7 +146,7 @@ class CExternalServicesPlugin extends AApiPlugin
 					}
 				}
 			}
-			
+			$aResultUserServices = array();
 			foreach($this->aConnectors as $aConnector)
 			{
 				$sServiceType = strtolower($aConnector['Name']);
@@ -123,7 +155,6 @@ class CExternalServicesPlugin extends AApiPlugin
 					$oSocial = new \CSocial();
 					$oSocial->TypeStr = $sServiceType;
 					$aSocial = $oSocial->toArray();
-					$aSocial['Connected'] = false;
 
 					$aUserServices[$sServiceType] = $aSocial;
 				}
@@ -135,18 +166,20 @@ class CExternalServicesPlugin extends AApiPlugin
 				{
 					if (trim($sScope) !== '')
 					{
-						$aUserServices[$sServiceType]['UserScopes'][$sScope] = (in_array($sScope, $aUserServices[$sServiceType]['Scopes']));
+						$aUserServices[$sServiceType]['UserScopes'][$sScope] = in_array($sScope, $aUserServices[$sServiceType]['Scopes']);
 					}
 				}
+				
+				$aResultUserServices[$sServiceType] =  $aUserServices[$sServiceType];
 			}
 			
-			$aAppData['Plugins']['ExternalServices']['Users'] = array_values($aUserServices);
+			$aAppData['Plugins']['ExternalServices']['Users'] = array_values($aResultUserServices);
 		}		
 		
 		$aAppData['AllowChangePassword'] = CApi::GetConf('plugins.external-services.allow-change-password', true);
 	}	
 	
-	public function QueryHook($aQuery)
+	public function QueryHookExternalServices($aQuery)
 	{
 		$sSocial = ucfirst($aQuery['external-services']);				
 		$this->sTenantHash = isset($aQuery['hash']) ? $aQuery['hash'] : '';
@@ -157,16 +190,76 @@ class CExternalServicesPlugin extends AApiPlugin
 		}
 	}
 	
+	public function QueryHookInviteAuth($aQuery)
+	{
+		$sHash = $aQuery['invite-auth'];				
+		
+		$oApiUsers = /* @var $oApiUsers \CApiUsersManager */ \CApi::Manager('users');
+		$oAccount = $oApiUsers->getAccountById($sHash, true);
+		if ($oAccount)
+		{
+			self::$sInviteEmail = $oAccount->Email;
+		}
+	}
+
 	public function GetSupportedScopes($sConnector)
 	{
 		$sConnector = ucfirst($sConnector);
 		return @\CExternalServicesConnectors::$sConnector('GetSupportedScopes');
 	}
 	
+	public function HasApiKey($sConnector)
+	{
+		$sConnector = ucfirst($sConnector);
+		return @\CExternalServicesConnectors::$sConnector('HasApiKey');
+	}
+
+	public function GetTranslatedScopes($aScopes)
+	{
+		$aResult = array();
+		foreach ($aScopes as $sScope)
+		{
+			$aResult[] = $this->I18N('PLUGIN_EXTERNAL_SERVICES/SCOPE_' . strtoupper($sScope));
+		}
+		return $aResult;
+	}
+	
 	public function AccountUpdatePassword(&$bAllowChangePassword)
 	{
 		$bAllowChangePassword = CApi::GetConf('plugins.external-services.allow-change-password', true);
 	}
+	
+	public function AjaxSocialAccountDelete($oServer)
+	{
+		$mResult = false;
+		$oTenant = null;
+		$oAccount /* @var $oAccount \CAccount */ = \api_Utils::GetDefaultAccount();
+		$oApiTenants = /* @var $oApiTenants \CApiSocialManager */ \CApi::Manager('tenants');
+
+		if ($oAccount && $oApiTenants)
+		{
+			$oTenant = (0 < $oAccount->IdTenant) ? $oApiTenants->getTenantById($oAccount->IdTenant) : $oApiTenants->getDefaultGlobalTenant();
+		}
+		if ($oTenant)
+		{
+			$sType = trim($oServer->getParamValue('Type', ''));
+			$oApiSocial /* @var $oApiSocial \CApiSocialManager */ = \CApi::Manager('social');
+			$oSocial = $oApiSocial->getSocial($oAccount->IdAccount, $sType);
+			if ($oSocial)
+			{
+				if ($oSocial->Email === $oAccount->Email)
+				{
+					$oSocial->Disabled = true;
+					$mResult = $oApiSocial->updateSocial($oSocial);
+				}
+				else
+				{
+					$mResult = $oApiSocial->deleteSocial($oAccount->IdAccount, $sType);
+				}
+			}
+		}
+		return $oServer->DefaultResponse(null, __FUNCTION__, $mResult);
+	}		
 }
 
 class CExternalServicesConnectors 
@@ -190,20 +283,24 @@ class CExternalServicesConnectors
 					{
 						self::Process($mResult);
 					}
+					else
+					{
+						\CApi::Location('./?error=es-001&service=' . $sConnector);
+					}
 				}
-				else if ($sMethod === 'GetSupportedScopes')
+				else
 				{
 					return call_user_func('\CExternalServicesConnector' . $sConnector . '::' . $sMethod);
 				}
 			}
 			else
 			{
-				echo 'Connector does not exist';
+				\CApi::Location('./?error=es-001&service=' . $sConnector);
 			}
 		}
 		else
 		{
-			echo 'Connector does not exist';
+			\CApi::Location('./?error=es-001&service=' . $sConnector);
 		}
 	}
 	
@@ -220,7 +317,7 @@ class CExternalServicesConnectors
 				$aAppData['Social' . $oSocial->SocialName] = $oSocial->SocialAllow;
 				$aAppData['Social' . $oSocial->SocialName . 'Id'] = $oSocial->SocialId;
 				$aAppData['Social' . $oSocial->SocialName . 'Key'] = $oSocial->SocialId;
-				if (isset($oSocial->SocialApiKey))
+				if (!empty($oSocial->SocialApiKey))
 				{
 					$aAppData['Social' . $oSocial->SocialName . 'ApiKey'] = $oSocial->SocialApiKey;
 				}
@@ -282,7 +379,7 @@ class CExternalServicesConnectors
 			if ($oUser)
 			{
 				$oApiIntegratorManager->setHelpdeskUserAsLoggedIn($oUser, false);
-				@setcookie ('p7social', '', time() - 1);
+				@setcookie('p7social', '', time() - 1);
 			}
 			else
 			{
@@ -328,6 +425,7 @@ class CExternalServicesConnectors
 	{
 		$sExternalServicesRedirect = '';
 		$sError = '';
+		$sErrorMessage = '';
 		if (isset($_COOKIE["external-services-redirect"]))
 		{
 			$sExternalServicesRedirect = $_COOKIE["external-services-redirect"];
@@ -341,6 +439,21 @@ class CExternalServicesConnectors
 		}
 		else
 		{
+			$oApiUsers = /* @var $oApiUsers \CApiUsersManager */ \CApi::Manager('users');
+			
+			$oInviteAccount = null;
+			if (isset($_COOKIE["external-services-invite-hash"]))
+			{
+				$oInviteAccount = $oApiUsers->getAccountById($_COOKIE["external-services-invite-hash"], true);
+				@setcookie('external-services-invite-hash', null);
+			}
+			
+			$sEmail = trim($mResult['email']);
+			if (empty($sEmail) && $oInviteAccount)
+			{
+				$mResult['email'] = $oInviteAccount->Email;
+			}
+			
 			$oApiSocial = /* @var $oApiSocial \CApiSocialManager */ \CApi::Manager('social');
 			$oSocial = new \CSocial();
 			$oSocial->TypeStr = $mResult['type'];
@@ -353,54 +466,78 @@ class CExternalServicesConnectors
 			if ($sExternalServicesRedirect === 'login')
 			{
 				self::SetValuesToCookie($mResult);
-	
-				$oApiUsers = /* @var $oApiUsers \CApiUsersManager */ \CApi::Manager('users');
-				$oAccount = $oApiUsers->getAccountByEmail($mResult['email']);
-				if (!$oAccount)
+
+				$oSocialOld = $oApiSocial->getSocialById($oSocial->IdSocial, $oSocial->TypeStr);
+				if ($oSocialOld)
 				{
-					$oAccount = $oApiUsers->getAccountBySocialEmail($mResult['email']);
-				}
-				if ($oAccount)
-				{
-					$oSocial->IdAccount = $oAccount->IdAccount;
-					$oSocialOld = $oApiSocial->getSocialById($oSocial->IdSocial, $oSocial->TypeStr);
-					if ($oSocialOld)
+					if ($oInviteAccount && $oInviteAccount->IdAccount === $oSocialOld->IdAccount || !$oInviteAccount)
 					{
-						if ($oSocial->IdAccount === $oSocialOld->IdAccount)
+						if (!$oSocialOld->Disabled && $oSocialOld->issetScope('auth'))
 						{
 							$oSocialOld->setScope('auth');
 							$oSocial->Scopes = $oSocialOld->Scopes;
 							$oApiSocial->updateSocial($oSocial);
+							$oInviteAccount = $oApiUsers->getAccountById($oSocialOld->IdAccount);
 						}
 						else
 						{
-							$sError = '?error=' . \ProjectCore\Notifications::AuthError;
+							$bResult = false;
+							$sError = '?error=es-002';
+							if (!empty($mResult['email']))
+							{
+								 $sError = $sError . '&email=' . $mResult['email'];
+							}
+							else 
+							{
+								 $sError = $sError . '&service=' . $mResult['type'];
+							}
 						}
 					}
 					else
 					{
-						$oSocial->setScopes($mResult['scopes']);
-						$oApiSocial->createSocial($oSocial);
+						$oInviteAccount = null;
+						$bResult = false;
+						$sError = '?error=es-003';
 					}
-
-					$oApiIntegrator = \CApi::Manager('integrator');
-					$oApiIntegrator->setAccountAsLoggedIn($oAccount, true);
-					
-					$oApiUsers->updateAccountLastLoginAndCount($oAccount->IdUser);					
 				}
 				else
 				{
-					$sError = '?error=' . \ProjectCore\Notifications::AuthError;
+					$oInviteAccount = $oApiUsers->getAccountByEmail($mResult['email']);
+					if ($oInviteAccount)
+					{
+						$oSocial->IdAccount = $oInviteAccount->IdAccount;
+						$oSocial->setScopes($mResult['scopes']);
+						$oApiSocial->createSocial($oSocial);
+					}
+					else
+					{
+						$sError = '?error=es-002' /*. \ProjectCore\Notifications::UnknownEmail*/;
+						if (!empty($mResult['email']))
+						{
+							 $sError = $sError . '&email=' . $mResult['email'];
+						}
+						else
+						{
+							 $sError = $sError . '&service=' . $mResult['type'];
+						}
+					}					
 				}
-				\CApi::Location('./' . $sError);
+				
+				if ($oInviteAccount)
+				{
+					$oApiIntegrator = \CApi::Manager('integrator');
+					$oApiIntegrator->setAccountAsLoggedIn($oInviteAccount, true);
+					$oApiUsers->updateAccountLastLoginAndCount($oInviteAccount->IdUser);					
+				}
+				\CApi::Location2('./' . $sError);
 			}
 			else
 			{
-				$oAccount = \api_Utils::GetDefaultAccount();
-				if ($oAccount)
+				$oInviteAccount = \api_Utils::GetDefaultAccount();
+				if ($oInviteAccount)
 				{
 					$bResult = false;
-					$oSocial->IdAccount = $oAccount->IdAccount;
+					$oSocial->IdAccount = $oInviteAccount->IdAccount;
 					$oSocialOld = $oApiSocial->getSocialById($oSocial->IdSocial, $oSocial->TypeStr);
 					
 					if ($oSocialOld)
@@ -409,7 +546,7 @@ class CExternalServicesConnectors
 						{
 							if (in_array('null', $mResult['scopes']) || count($mResult['scopes']) === 0)
 							{
-								$bResult = $oSocial->deleteSocial($oAccount->IdAccount, $oSocial->TypeStr);
+								$bResult = $oSocial->deleteSocial($oInviteAccount->IdAccount, $oSocial->TypeStr);
 							}
 							else
 							{
@@ -420,6 +557,11 @@ class CExternalServicesConnectors
 						else
 						{
 							$bResult = false;
+							$oPlugin = \CApi::Plugin()->GetPluginByName('external-services');
+							if ($oPlugin)
+							{							
+								$sErrorMessage = $oPlugin->I18N('PLUGIN_EXTERNAL_SERVICES/INFO_ACCOUNT_ALREADY_ASSIGNED', $oInviteAccount);
+							}
 						}
 					}
 					else if (!in_array('null', $mResult['scopes']) && count($mResult['scopes']) > 0)
@@ -431,7 +573,7 @@ class CExternalServicesConnectors
 					echo 
 					"<script>"
 						. "if (typeof(window.opener.servicesSettingsViewModelCallback) !== 'undefined') {"
-						.		"window.opener.servicesSettingsViewModelCallback('".$mResult['type']."', " . $sResult . ");"
+						.		"window.opener.servicesSettingsViewModelCallback('".$mResult['type']."', " . $sResult . ", '".$sErrorMessage."');"
 						.		"window.close();"
 						. "}"
 					. "</script>";					
@@ -473,13 +615,19 @@ class CExternalServicesConnectors
 
 class CExternalServicesConnector
 {
+	public static $ConnectorName = 'connector';
 	public static $Debug = true;
 	public static $Scopes = array();
-	
+
 	public static function Init($oTenant = null) 
 	{
 		self::$Scopes = isset($_COOKIE['external-services-scopes']) ? 
 			explode('|', $_COOKIE['external-services-scopes']) : array();
+	}
+
+	public static function HasApiKey() 
+	{
+		return false;
 	}
 
 	public static function GetSupportedScopes() 

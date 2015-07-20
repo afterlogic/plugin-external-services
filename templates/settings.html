@@ -26,11 +26,11 @@
 		<div class="row"></div>
 
 		<div class="buttons" style="text-align: left;">
-			<span class="button">
-				<span data-i18n="PLUGIN_EXTERNAL_SERVICES/APPLY_BUTTON" data-bind="i18n: 'text', click: function (oConnector) {$parent.onSaveClick(oConnector);}"></span>
+			<span class="button" data-bind="click: function (oConnector) {$parent.onSaveClick(oConnector);}">
+				<span data-i18n="PLUGIN_EXTERNAL_SERVICES/APPLY_BUTTON" data-bind="i18n: 'text'"></span>
 			</span>
-			<span class="button" data-bind="visible: connected()">
-				<span data-i18n="PLUGIN_EXTERNAL_SERVICES/SIGN_OUT_BUTTON" data-bind="i18n: 'text', click: function (oConnector) {$parent.onSignOutClick(oConnector);}"></span>
+			<span class="button" data-bind="visible: connected(), click: function (oConnector) {$parent.onSignOutClick(oConnector);}">
+				<span data-i18n="PLUGIN_EXTERNAL_SERVICES/SIGN_OUT_BUTTON" data-bind="i18n: 'text'"></span>
 			</span>
 		</div>
 	</div>

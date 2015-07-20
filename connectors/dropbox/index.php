@@ -2,6 +2,8 @@
 
 class CExternalServicesConnectorDropbox extends CExternalServicesConnector
 {
+	public static $ConnectorName = 'dropbox';
+			
 	public static function GetSupportedScopes()
 	{
 		return array('auth', 'filestorage');
@@ -10,11 +12,11 @@ class CExternalServicesConnectorDropbox extends CExternalServicesConnector
 	public static function CreateClient($oTenant)
 	{
 		$oClient = null;
-		$oSocial = $oTenant->getSocialByName('dropbox');
+		$oSocial = $oTenant->getSocialByName(self::$ConnectorName);
 		
 		if(isset($oSocial) && $oSocial->SocialAllow)
 		{
-			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services=dropbox';
+			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services='.self::$ConnectorName;
 			if (!strpos($sRedirectUrl, '://localhost'))
 			{
 				$sRedirectUrl = str_replace('http:', 'https:', $sRedirectUrl);
@@ -73,7 +75,7 @@ class CExternalServicesConnectorDropbox extends CExternalServicesConnector
 				//$oClient->ResetAccessToken();
 
 				$aSocial = array(
-					'type' => 'dropbox',
+					'type' => self::$ConnectorName,
 					'id' => $oUser->uid,
 					'name' => $oUser->display_name,
 					'email' => isset($oUser->email) ? $oUser->email : '',
@@ -82,7 +84,7 @@ class CExternalServicesConnectorDropbox extends CExternalServicesConnector
 						
 				);
 
-				\CApi::Log('social_user_dropbox');
+				\CApi::Log('social_user_' . self::$ConnectorName);
 				\CApi::LogObject($oUser);
 				$bResult = $aSocial;
 			}
@@ -90,12 +92,8 @@ class CExternalServicesConnectorDropbox extends CExternalServicesConnector
 			{
 				$bResult = false;
 				$oClient->ResetAccessToken();
-				self::_socialError($oClient->error, 'dropbox');
+				self::_socialError($oClient->error, self::$ConnectorName);
 			}
-		}
-		else
-		{
-			echo 'Connector is not allowed';
 		}
 		
 		return $bResult;

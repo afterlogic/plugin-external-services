@@ -2,6 +2,8 @@
 
 class CExternalServicesConnectorFacebook extends CExternalServicesConnector
 {
+	public static $ConnectorName = 'facebook';
+	
 	public static function GetSupportedScopes()
 	{
 		return array('auth');
@@ -10,11 +12,11 @@ class CExternalServicesConnectorFacebook extends CExternalServicesConnector
 	public static function CreateClient($oTenant)
 	{
 		$oClient = null;
-		$oSocial = $oTenant->getSocialByName('facebook');
+		$oSocial = $oTenant->getSocialByName(self::$ConnectorName);
 		
 		if(isset($oSocial) && $oSocial->SocialAllow)
 		{
-			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services=facebook';
+			$sRedirectUrl = rtrim(\MailSo\Base\Http::SingletonInstance()->GetFullUrl(), '\\/ ').'/?external-services='.self::$ConnectorName;
 			
 			require(PSEVEN_APP_ROOT_PATH.'libraries/OAuthClient/http.php');
 			require(PSEVEN_APP_ROOT_PATH.'libraries/OAuthClient/oauth_client.php');
@@ -72,14 +74,15 @@ class CExternalServicesConnectorFacebook extends CExternalServicesConnector
 				$oClient->ResetAccessToken();
 
 				$aSocial = array(
-					'type' => 'facebook',
+					'type' => self::$ConnectorName,
 					'id' => $oUser->id,
 					'name' => $oUser->name,
 					'email' => isset($oUser->email) ? $oUser->email : '',
+					'access_token' => $oClient->access_token,
 					'scopes' => self::$Scopes
 				);
 
-				\CApi::Log('social_user_facebook');
+				\CApi::Log('social_user_' . self::$ConnectorName);
 				\CApi::LogObject($oUser);
 
 				$bResult = $aSocial;
@@ -87,13 +90,9 @@ class CExternalServicesConnectorFacebook extends CExternalServicesConnector
 			else
 			{
 				$oClient->ResetAccessToken();
-				self::_socialError($oClient->error, 'facebook');
+				self::_socialError($oClient->error, self::$ConnectorName);
 				$bResult = false;
 			}
-		}
-		else
-		{
-			echo 'Connector is not allowed';
 		}
 		
 		return $bResult;
