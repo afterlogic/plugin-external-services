@@ -9,7 +9,14 @@
 					'CComposeViewModel' === sViewModelName || 
 					'CHelpdeskLoginViewModel' === sViewModelName))
 		{
-			oViewModel.servicesAccounts = ko.observableArray(oExternalServices ? oExternalServices.Users : []);
+			if (oViewModel.servicesAccounts)
+			{
+				oViewModel.servicesAccounts(oExternalServices ? oExternalServices.Users : []);
+			}
+			else
+			{
+				oViewModel.servicesAccounts = ko.observableArray(oExternalServices ? oExternalServices.Users : []);
+			}
 			_.each(oViewModel.servicesAccounts(), function (oItem){
 				var aScopes = [];
 				_.each(oItem.UserScopes, function (sValue, sKey){
@@ -100,7 +107,7 @@
 				{
 					AfterLogicApi.loadScript('https://www.dropbox.com/static/api/2/dropins.js', null, {
 						'id': 'dropboxjs',
-						'data-app-key': AfterLogicApi.getAppDataItem('SocialDropboxKey')
+						'data-app-key': AfterLogicApi.getAppDataItem('SocialDropboxId')
 					});
 				}
 				oViewModel.getAttachFromTooltip = function (sService)

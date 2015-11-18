@@ -316,12 +316,13 @@ class CExternalServicesConnectors
 			{
 				$aAppData['Social' . $oSocial->SocialName] = $oSocial->SocialAllow;
 				$aAppData['Social' . $oSocial->SocialName . 'Id'] = $oSocial->SocialId;
-				$aAppData['Social' . $oSocial->SocialName . 'Key'] = $oSocial->SocialId;
+/*				
 				if (!empty($oSocial->SocialApiKey))
 				{
 					$aAppData['Social' . $oSocial->SocialName . 'ApiKey'] = $oSocial->SocialApiKey;
 				}
-				$aAppData['Social' . $oSocial->SocialName . 'Secret'] = $oSocial->SocialSecret;
+ */
+//				$aAppData['Social' . $oSocial->SocialName . 'Secret'] = $oSocial->SocialSecret;
 				$aAppData['Social' . $oSocial->SocialName . 'Scopes'] = $oSocial->SocialScopes;
 			}
 		}
@@ -343,7 +344,7 @@ class CExternalServicesConnectors
 					$mIdTenant = $oApiIntegratorManager->getTenantIdByHash($sTenantHash);
 					if (!is_int($mIdTenant))
 					{
-						throw new \ProjectCore\Exceptions\ClientException(\ProjectCore\Notifications::InvalidInputParameter);
+						throw new \Core\Exceptions\ClientException(\Core\Notifications::InvalidInputParameter);
 					}
 					$bResult = false;
 					try
@@ -352,24 +353,24 @@ class CExternalServicesConnectors
 					}
 					catch (\Exception $oException)
 					{
-						$iErrorCode = \ProjectCore\Notifications::UnknownError;
+						$iErrorCode = \Core\Notifications::UnknownError;
 						if ($oException instanceof \CApiManagerException)
 						{
 							switch ($oException->getCode())
 							{
 								case \Errs::HelpdeskManager_UserAlreadyExists:
-									$iErrorCode = \ProjectCore\Notifications::HelpdeskUserAlreadyExists;
+									$iErrorCode = \Core\Notifications::HelpdeskUserAlreadyExists;
 									break;
 								case \Errs::HelpdeskManager_UserCreateFailed:
-									$iErrorCode = \ProjectCore\Notifications::CanNotCreateHelpdeskUser;
+									$iErrorCode = \Core\Notifications::CanNotCreateHelpdeskUser;
 									break;
 								case \Errs::Db_ExceptionError:
-									$iErrorCode = \ProjectCore\Notifications::DataBaseError;
+									$iErrorCode = \Core\Notifications::DataBaseError;
 									break;
 							}
 						}
 
-						throw new \ProjectCore\Exceptions\ClientException($iErrorCode);
+						throw new \Core\Exceptions\ClientException($iErrorCode);
 					}
 				}
 
@@ -511,7 +512,7 @@ class CExternalServicesConnectors
 					}
 					else
 					{
-						$sError = '?error=es-002' /*. \ProjectCore\Notifications::UnknownEmail*/;
+						$sError = '?error=es-002' /*. \Core\Notifications::UnknownEmail*/;
 						if (!empty($mResult['email']))
 						{
 							 $sError = $sError . '&email=' . $mResult['email'];

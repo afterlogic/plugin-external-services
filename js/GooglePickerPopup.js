@@ -4,7 +4,6 @@
 function GooglePickerPopup()
 {
 	this.allowGoogle = AfterLogicApi.getAppDataItem('SocialGoogle');
-	this.googleKey = AfterLogicApi.getAppDataItem('SocialGoogleApiKey');
 	this.googleClientId = AfterLogicApi.getAppDataItem('SocialGoogleId');
 
 	this.picker = null;
@@ -160,7 +159,6 @@ GooglePickerPopup.prototype.createPicker = function ()
 		this.picker = new window.google.picker.PickerBuilder()
 			.addView(docsView)
 			.setOAuthToken(oauthToken.access_token)
-//			.setDeveloperKey(self.googleKey)
 			.setAppId(self.googleClientId)
 			.setOrigin(window.location.protocol + '//' +  window.location.host)
 			.setCallback(_.bind(self.pickerCallback, self, oauthToken.access_token))

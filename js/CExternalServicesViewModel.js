@@ -4,6 +4,9 @@
 function CExternalServicesViewModel()
 {
 	this.servicesAccounts =  ko.observableArray([]);
+	this.visible =  ko.computed(function () {
+		return (this.servicesAccounts().length > 0);
+	}, this);
 	if (AfterLogicApi.runPluginHook)
 	{
 		AfterLogicApi.runPluginHook('view-model-defined', [this.__name, this]);
